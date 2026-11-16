@@ -1,0 +1,11 @@
+incident_id,title,category,claim_text,source_platform,fact_check_label,severity,origin_region,virality_level,sharing_probability,icon,origin_user_id,total_reached,reach_percentage,propagation_steps,communities_affected
+1,COVID Vaccine Microchip,Health,COVID-19 vaccines contain microchips designed to track people via 5G networks.,WhatsApp,false,high,Global,viral,0.35,🦠,U0007,1673,66.9,12,5
+2,College Closure Rumour,Education,XYZ Engineering College will remain closed for the entire week due to a pest control emergency.,WhatsApp,false,medium,Local,moderate,0.5,🏫,U0001,2107,84.3,10,5
+3,Tsunami Warning Hoax,Disaster,A massive tsunami is expected to hit the eastern coast within the next 6 hours. Evacuate immediately.,Facebook,false,critical,Coastal,viral,0.6,🌊,U0002,2244,89.8,8,5
+4,Miracle Turmeric Cure,Health,Drinking warm lemon water with turmeric every morning can cure diabetes and prevent cancer.,Instagram,mixed,medium,National,moderate,0.4,💊,U0006,1858,74.3,12,5
+5,5G Health Conspiracy,Technology,5G towers emit radiation that weakens the immune system and causes respiratory illness.,Twitter,false,high,Global,viral,0.3,📱,U0004,1372,54.9,15,5
+6,Election Rigging Claim,Politics,EVMs were hacked to manipulate results in the recent state election.,Twitter,false,critical,National,viral,0.45,🗳️,U0027,1955,78.2,10,5
+7,Bank Account Freeze Alert,Finance,RBI will freeze all savings accounts above 1 lakh from next Monday.,WhatsApp,false,high,National,viral,0.55,🏦,U0005,2193,87.7,9,5
+8,Drinking Water Contamination,Environment,City water supply has been contaminated with toxic industrial chemicals since last week.,Facebook,mixed,high,Local,moderate,0.45,💧,U0011,1979,79.2,12,5
+9,Free Government Laptop Scheme,Government,Government is giving free laptops to all college students via a registration link.,Instagram,false,medium,National,high,0.5,💻,U0012,2080,83.2,9,5
+10,Earthquake Prediction,Disaster,Scientists predict an 8.5 magnitude earthquake in Delhi within 48 hours.,Twitter,false,critical,Regional,viral,0.55,🌍,U0003,2201,88.0,9,5

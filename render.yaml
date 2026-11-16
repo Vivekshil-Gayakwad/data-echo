@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: data-echo-verification
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build && pip install -r backend/requirements.txt
+    startCommand: gunicorn --chdir backend --bind 0.0.0.0:$PORT --workers 2 --threads 4 app:app
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: NODE_VERSION
+        value: 20.12.0
