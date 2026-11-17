@@ -89,6 +89,18 @@ def jaccard_similarity(text1: str, text2: str) -> float:
     return round(len(intersection) / len(union), 4)
 
 
+def overlap_coefficient(text1: str, text2: str) -> float:
+    """
+    Computes Szymkiewicz–Simpson Overlap Coefficient: |A ∩ B| / min(|A|, |B|).
+    Robust against unequal text lengths when a query statement is fully contained in a record.
+    """
+    set1 = tokenize(text1)
+    set2 = tokenize(text2)
+    if not set1 or not set2:
+        return 0.0
+    return round(len(set1.intersection(set2)) / min(len(set1), len(set2)), 4)
+
+
 def compute_hash_signature(text: str) -> dict:
     """
     Computes hashing signatures for duplicate detection:
@@ -207,7 +219,7 @@ OFFICIAL_RECORDS_ARCHIVE = [
     {
         "id": "REC-001",
         "category": "Government",
-        "official_statement": "Ministry of Education launches National Means-cum-Merit Scholarship Scheme for eligible students across states.",
+        "official_statement": "Ministry of Education launches National Means-cum-Merit PM Scholarship Scheme notification for eligible college and university students across states.",
         "status": "OFFICIAL_SUPPORTED",
         "date": "2026-10-15T09:30:00Z",
         "source": "scholarships.gov.in",
@@ -284,13 +296,13 @@ OFFICIAL_RECORDS_ARCHIVE = [
     {
         "id": "REC-008",
         "category": "Sports News",
-        "official_statement": "BCCI Media Release: Team India secures victory in ICC Champions Tournament final, defeating opponent by 5 wickets in high-scoring contest.",
+        "official_statement": "BCCI Media Release: Team India secures victory in ICC Cricket World Cup and Champions Tournament final, winning global title.",
         "status": "OFFICIAL_SUPPORTED",
         "date": "2026-10-25T18:30:00Z",
         "source": "bcci.tv",
         "publisher": "BCCI Official Media",
         "url": "https://bcci.tv/news/india-champions-victory",
-        "contradicts": []
+        "contradicts": ["india loses world cup final"]
     },
     {
         "id": "REC-009",
@@ -313,6 +325,28 @@ OFFICIAL_RECORDS_ARCHIVE = [
         "publisher": "PIB Fact Check Bureau",
         "url": "https://pib.gov.in/factcheck/free-laptop-scheme-hoax",
         "contradicts": ["free government laptop scheme", "free laptops to all college students"]
+    },
+    {
+        "id": "REC-011",
+        "category": "Financial & Economy",
+        "official_statement": "RBI & PIB Fact Check confirms: The Reserve Bank of India has NOT withdrawn or cancelled 500 rupee currency notes. All 500 rupee banknotes continue to remain valid legal tender.",
+        "status": "OFFICIAL_CONTRADICTED",
+        "date": "2026-10-26T10:00:00Z",
+        "source": "rbi.org.in",
+        "publisher": "Reserve Bank of India & PIB Fact Check",
+        "url": "https://rbi.org.in/press/2026/500-rupee-note-rumor-debunk",
+        "contradicts": ["rbi cancels all 500 rupee currency notes", "500 rupee notes demonetized", "500 note banned from midnight", "500 notes discontinued", "rbi to cancel 500 note"]
+    },
+    {
+        "id": "REC-012",
+        "category": "Science & Space",
+        "official_statement": "NASA Astrobiology and Jet Propulsion Laboratory confirm scientific evidence of past water flows and hydrated mineral salts on Mars surface.",
+        "status": "OFFICIAL_SUPPORTED",
+        "date": "2026-09-28T14:00:00Z",
+        "source": "nasa.gov",
+        "publisher": "NASA Jet Propulsion Laboratory (JPL)",
+        "url": "https://www.nasa.gov/press-release/nasa-confirms-evidence-that-liquid-water-flows-on-today-s-mars",
+        "contradicts": []
     }
 ]
 
@@ -590,56 +624,65 @@ def verify_information_claim(claim_text: str):
         }
 
     # 2. Fallback to authoritative archive records if live query returned no articles
-    best_match_record = None
-    best_jaccard = 0.0
-    best_lev = 0.0
-    contradiction_found = False
-    support_found = False
-    partial_found = False
+    best_support_rec = None
+    best_support_sim = 0.0
+    best_support_lev = 0.0
+
+    best_contradict_rec = None
+    best_contradict_sim = 0.0
+    best_contradict_lev = 0.0
+
+    best_partial_rec = None
+    best_partial_sim = 0.0
+    best_partial_lev = 0.0
 
     for record in OFFICIAL_RECORDS_ARCHIVE:
-        # Check direct text matching with official statement
-        j_score = jaccard_similarity(claim_text, record["official_statement"])
-        lev_score = levenshtein_similarity(claim_text, record["official_statement"])
+        j_stmt = jaccard_similarity(claim_text, record["official_statement"])
+        lev_stmt = levenshtein_similarity(claim_text, record["official_statement"])
+        ov_stmt = overlap_coefficient(claim_text, record["official_statement"])
+        sim_stmt = max(j_stmt, lev_stmt * 0.8, ov_stmt * 0.85)
 
-        # Check contradiction keywords
-        contradicts_claim = False
+        # Check contradiction rumors
+        max_neg_sim = 0.0
+        neg_lev = 0.0
         for neg in record.get("contradicts", []):
-            if jaccard_similarity(claim_text, neg) >= 0.40 or neg.lower() in claim_text.lower():
-                contradicts_claim = True
-                break
+            j_neg = jaccard_similarity(claim_text, neg)
+            l_neg = levenshtein_similarity(claim_text, neg)
+            ov_neg = overlap_coefficient(claim_text, neg)
+            n_sim = max(j_neg, l_neg * 0.8, ov_neg * 0.85)
+            if neg.lower() in claim_text.lower() and len(neg) > 10:
+                n_sim = max(n_sim, 0.88)
+            if n_sim > max_neg_sim:
+                max_neg_sim = n_sim
+                neg_lev = l_neg
 
-        total_sim = max(j_score, lev_score)
-        if total_sim > best_jaccard or contradicts_claim:
-            best_match_record = record
-            best_jaccard = max(best_jaccard, j_score)
-            best_lev = max(best_lev, lev_score)
+        rec_status = record.get("status")
+        if rec_status == "OFFICIAL_CONTRADICTED":
+            if max_neg_sim >= 0.45 and max_neg_sim > best_contradict_sim:
+                best_contradict_sim = max_neg_sim
+                best_contradict_lev = neg_lev
+                best_contradict_rec = record
+        elif rec_status == "OFFICIAL_SUPPORTED":
+            if sim_stmt >= 0.25 and sim_stmt > best_support_sim:
+                best_support_sim = sim_stmt
+                best_support_lev = lev_stmt
+                best_support_rec = record
+        elif rec_status == "OFFICIAL_PARTIALLY_SUPPORTED":
+            if sim_stmt >= 0.25 and sim_stmt > best_partial_sim:
+                best_partial_sim = sim_stmt
+                best_partial_lev = lev_stmt
+                best_partial_rec = record
 
-            if contradicts_claim or record["status"] == "OFFICIAL_CONTRADICTED":
-                contradiction_found = True
-            elif record["status"] == "OFFICIAL_SUPPORTED":
-                support_found = True
-            elif record["status"] == "OFFICIAL_PARTIALLY_SUPPORTED":
-                partial_found = True
-
-    # Also evaluate semantic match criteria
-    if not contradiction_found and not support_found and not partial_found:
-        # If words like "announced", "officially", "approved", "won" match a positive statement
-        if best_match_record and best_jaccard >= 0.35:
-            if best_match_record["status"] == "OFFICIAL_SUPPORTED":
-                support_found = True
-            elif best_match_record["status"] == "OFFICIAL_CONTRADICTED":
-                contradiction_found = True
-            else:
-                partial_found = True
-
-    # 2. Determine Exact Rule-Based Truth Verdict (No Randomness)
-    if contradiction_found:
+    # Determine winning match between support, contradict, and partial
+    if best_contradict_sim >= 0.45 and best_contradict_sim > best_support_sim:
+        best_match_record = best_contradict_rec
+        best_jaccard = best_contradict_sim
+        best_lev = best_contradict_lev
         verdict = "Contradicted"
         verdict_label = "False"
         verdict_color = "#ef4444"
         verdict_badge = "❌ Contradicted / False"
-        truth_score = round(max(3.8, 12.0 - (best_jaccard * 10.0)), 1)
+        truth_score = round(max(3.8, 12.0 - (best_contradict_sim * 10.0)), 1)
         verdict_explanation = (
             "Reliable official evidence explicitly contradicts or debunks this claim. "
             "Authoritative monitoring registries confirm that no such event, policy, or incident occurred."
@@ -647,17 +690,20 @@ def verify_information_claim(claim_text: str):
         factor_breakdown = {
             "official_corroboration": 0.0,
             "multi_source_consensus": 10.0,
-            "semantic_accuracy": round(best_jaccard * 100, 1),
+            "semantic_accuracy": round(best_contradict_sim * 100, 1),
             "source_authority_rating": 88.0,
             "debunk_negation_penalty": 95.0,
             "exact_percentage": truth_score
         }
-    elif support_found:
+    elif best_support_sim >= 0.25 and best_support_sim >= best_contradict_sim:
+        best_match_record = best_support_rec
+        best_jaccard = best_support_sim
+        best_lev = best_support_lev
         verdict = "Supported"
         verdict_label = "True"
         verdict_color = "#22c55e"
         verdict_badge = "✅ Supported / True"
-        truth_score = round(min(98.6, 88.0 + (best_jaccard * 12.0)), 1)
+        truth_score = round(min(98.6, 88.0 + (best_support_sim * 12.0)), 1)
         verdict_explanation = (
             "Official evidence supports the claim. The details match confirmed announcements "
             "published directly on designated authoritative and institutional portals."
@@ -665,17 +711,20 @@ def verify_information_claim(claim_text: str):
         factor_breakdown = {
             "official_corroboration": 98.0,
             "multi_source_consensus": 92.0,
-            "semantic_accuracy": round(best_jaccard * 100, 1),
+            "semantic_accuracy": round(best_support_sim * 100, 1),
             "source_authority_rating": 96.0,
             "debunk_negation_penalty": 0.0,
             "exact_percentage": truth_score
         }
-    elif partial_found or (best_jaccard >= 0.25 and best_jaccard < 0.55):
+    elif best_partial_sim >= 0.25:
+        best_match_record = best_partial_rec
+        best_jaccard = best_partial_sim
+        best_lev = best_partial_lev
         verdict = "Partially Supported / Misleading"
         verdict_label = "Misleading"
         verdict_color = "#f97316"
         verdict_badge = "⚠️ Misleading / Mixed"
-        truth_score = round(max(38.0, min(62.0, 48.0 + (best_jaccard * 20.0))), 1)
+        truth_score = round(max(38.0, min(62.0, 48.0 + (best_partial_sim * 20.0))), 1)
         verdict_explanation = (
             "The claim contains some authentic elements combined with exaggerated, unverified, or incorrect conclusions. "
             "Portions of the premise may be rooted in real discussions, but the core outcome is distorted."
@@ -683,17 +732,20 @@ def verify_information_claim(claim_text: str):
         factor_breakdown = {
             "official_corroboration": 45.0,
             "multi_source_consensus": 52.0,
-            "semantic_accuracy": round(best_jaccard * 100, 1),
+            "semantic_accuracy": round(best_partial_sim * 100, 1),
             "source_authority_rating": 70.0,
             "debunk_negation_penalty": 40.0,
             "exact_percentage": truth_score
         }
     else:
+        best_match_record = None
+        best_jaccard = 0.0
+        best_lev = 0.0
         verdict = "Unverified"
         verdict_label = "Unverified"
         verdict_color = "#eab308"
         verdict_badge = "❓ Unverified"
-        truth_score = 22.4
+        truth_score = 24.5
         verdict_explanation = (
             "Evidence is currently incomplete. No official confirmation or authoritative denial "
             "was found within primary institutional databases. Exercise caution before forwarding."
@@ -701,7 +753,7 @@ def verify_information_claim(claim_text: str):
         factor_breakdown = {
             "official_corroboration": 15.0,
             "multi_source_consensus": 18.0,
-            "semantic_accuracy": round(best_jaccard * 100, 1),
+            "semantic_accuracy": 0.0,
             "source_authority_rating": 30.0,
             "debunk_negation_penalty": 10.0,
             "exact_percentage": truth_score

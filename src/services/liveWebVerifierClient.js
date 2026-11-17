@@ -23,13 +23,14 @@ import {
 const DEBUNK_KEYWORDS = new Set([
   'fake', 'hoax', 'false', 'debunked', 'debunk', 'untrue', 'rumour',
   'rumor', 'scam', 'fraud', 'misleading', 'fact check', 'busted',
-  'no truth', 'misinformation', 'fabricated', 'clarifies', 'denies', 'clarification'
+  'no truth', 'misinformation', 'fabricated'
 ]);
 
 const SUPPORT_KEYWORDS = new Set([
   'confirmed', 'official', 'officially', 'announces', 'announced',
   'statement', 'approved', 'launches', 'won', 'signed', 'verified',
-  'releases', 'cleared', 'notified', 'government', 'ministry', 'portal'
+  'releases', 'cleared', 'notified', 'government', 'ministry', 'portal',
+  'scholarship', 'advisory', 'directive', 'scheme'
 ]);
 
 // 1. LIVE WIKIPEDIA KNOWLEDGE SEARCH (Full CORS support from browser)
@@ -150,13 +151,24 @@ export async function verifyClaimWithLiveInternet(claimText = '') {
   // Rule-based verdict determination
   let debunkHits = 0;
   let supportHits = 0;
+  let hasHeadlineDebunk = false;
   const claimTokens = tokenize(cleanClaim);
 
   scoredArticles.forEach(art => {
+    const titleLower = (art.title || '').toLowerCase();
     const t = `${art.title} ${art.snippet}`.toLowerCase();
-    DEBUNK_KEYWORDS.forEach(kw => { if (t.includes(kw)) debunkHits++; });
-    SUPPORT_KEYWORDS.forEach(kw => { if (t.includes(kw) || claimTokens.has(kw)) supportHits++; });
+    DEBUNK_KEYWORDS.forEach(kw => {
+      if (t.includes(kw)) debunkHits++;
+      if (titleLower.includes(kw) && ['fake', 'hoax', 'false', 'debunked', 'fact check'].includes(kw)) {
+        hasHeadlineDebunk = true;
+      }
+    });
+    SUPPORT_KEYWORDS.forEach(kw => {
+      if (t.includes(kw) || claimTokens.has(kw)) supportHits++;
+    });
   });
+
+  const isDebunkDominant = (debunkHits > 0 && debunkHits > supportHits) || hasHeadlineDebunk;
 
   const hasMatches = scoredArticles.length > 0;
   const topMatch = scoredArticles[0] || null;
@@ -168,15 +180,15 @@ export async function verifyClaimWithLiveInternet(claimText = '') {
   );
 
   let sOfficial = 18.0;
-  if (debunkHits > 0 && hasOfficialSource) sOfficial = 0.0;
-  else if (debunkHits > 0) sOfficial = 8.0;
+  if (isDebunkDominant && hasOfficialSource) sOfficial = 0.0;
+  else if (isDebunkDominant) sOfficial = 8.0;
   else if (supportHits > 0 && hasOfficialSource) sOfficial = 98.5;
   else if (supportHits > 0) sOfficial = 85.0;
   else if (hasMatches) sOfficial = 42.0;
 
   const pubCount = scoredArticles.length;
   let sConsensus = 14.0;
-  if (debunkHits > 0) sConsensus = Math.max(4.0, 24.0 - debunkHits * 8.0);
+  if (isDebunkDominant) sConsensus = Math.max(4.0, 24.0 - debunkHits * 8.0);
   else if (pubCount >= 4) sConsensus = 96.0;
   else if (pubCount >= 2) sConsensus = 82.0 + pubCount * 3.0;
   else if (pubCount >= 1) sConsensus = 66.0;
@@ -185,34 +197,34 @@ export async function verifyClaimWithLiveInternet(claimText = '') {
   const topJac = topMatch?.jaccard_similarity || 0.0;
   const sSemantic = +((0.55 * topLev + 0.45 * topJac) * 100).toFixed(1);
   const sProv = hasMatches ? Math.min(98.0, 72.0 + (pubCount * 6.0)) : 20.0;
-  const pNegation = Math.min(100.0, debunkHits * 48.0);
+  const pNegation = isDebunkDominant ? Math.min(100.0, debunkHits * 48.0) : 0.0;
 
   let verdict = 'Unverified';
   let verdictLabel = 'unverified';
   let verdictBadge = '❓ Unverified';
-  let truthScore = 22.4;
+  let truthScore = 24.5;
   let explanation = '';
 
-  if (debunkHits > 0 && hasOfficialSource) {
+  if (isDebunkDominant && hasOfficialSource) {
     verdict = 'Contradicted';
     verdictLabel = 'contradicted';
     verdictBadge = '❌ Contradicted / False';
     truthScore = +(Math.max(3.2, 12.5 - debunkHits * 3.2 + sSemantic * 0.04)).toFixed(1);
     explanation = `Live search identified web sources refuting or fact-checking this incident. Published reporting from ${topMatch?.publisher || 'news registries'} contradicts the core premise.`;
-  } else if (debunkHits > 0) {
+  } else if (isDebunkDominant) {
     verdict = 'Contradicted';
     verdictLabel = 'contradicted';
     verdictBadge = '❌ Contradicted / False';
     truthScore = +(Math.max(6.5, 20.0 - debunkHits * 4.0 + sSemantic * 0.06)).toFixed(1);
     explanation = `Web fact-checking articles explicitly refute this claim as an unverified rumor or inaccurate assertion.`;
-  } else if (hasMatches && topScore >= 0.28 && supportHits > 0) {
+  } else if (hasMatches && (topScore >= 0.22 || supportHits >= 1)) {
     verdict = 'Supported';
     verdictLabel = 'supported';
     verdictBadge = '✅ Supported / True';
     const raw = (0.35 * sOfficial) + (0.25 * sConsensus) + (0.20 * sSemantic) + (0.10 * sProv) + (0.10 * (100.0 - pNegation));
-    truthScore = +(Math.min(98.8, Math.max(76.5, raw))).toFixed(1);
-    explanation = `Verified by real-time reports on the internet. ${topMatch.publisher} actively documents and corroborates this event with matching factual context.`;
-  } else if (hasMatches && (topScore >= 0.18 || pubCount >= 2)) {
+    truthScore = +(Math.min(98.8, Math.max(78.5, raw))).toFixed(1);
+    explanation = `Verified by real-time reports on the internet. ${topMatch?.publisher || 'Authoritative portals'} actively document and corroborate this event with matching factual context.`;
+  } else if (hasMatches && (topScore >= 0.16 || pubCount >= 2)) {
     verdict = 'Partially Supported / Misleading';
     verdictLabel = 'misleading';
     verdictBadge = '⚠️ Misleading / Mixed';
@@ -223,7 +235,7 @@ export async function verifyClaimWithLiveInternet(claimText = '') {
     verdict = 'Unverified';
     verdictLabel = 'unverified';
     verdictBadge = '❓ Unverified';
-    truthScore = 22.4;
+    truthScore = 24.5;
     earliestSourceName = 'Origin Unknown';
     explanation = 'No corroborating reporting, government announcements, or official fact-checks exist on the internet for this claim. Treat with caution as an unverified rumor.';
   }

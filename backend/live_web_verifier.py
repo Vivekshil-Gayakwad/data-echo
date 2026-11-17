@@ -243,14 +243,14 @@ def extract_attributions(text: str):
 
 DEBUNK_KEYWORDS = {
     'fake', 'hoax', 'false', 'debunked', 'debunk', 'untrue', 'rumour',
-    'rumor', 'scam', 'fraud', 'misleading', 'fact check', 'busted',
-    'no truth', 'misinformation', 'fabricated', 'clarifies', 'denies', 'clarification'
+    'rumor', 'scam', 'fraud', 'busted', 'no truth', 'misinformation', 'fabricated'
 }
 
 SUPPORT_KEYWORDS = {
     'confirmed', 'official', 'officially', 'announces', 'announced',
     'statement', 'approved', 'launches', 'won', 'signed', 'verified',
-    'releases', 'cleared', 'notified', 'government', 'ministry', 'portal'
+    'releases', 'cleared', 'notified', 'government', 'ministry', 'portal',
+    'scholarship', 'advisory', 'directive'
 }
 
 
@@ -268,6 +268,11 @@ def calculate_exact_truth_metrics(claim_text: str, scored_articles: list, top_sc
     4. Domain Authority & Source Trustworthiness (10%)
     5. Fact-Check Negation Index (10%)
     """
+    top_art = scored_articles[0] if scored_articles else None
+    top_title = top_art.get('title', '').lower() if top_art else ''
+    is_headline_debunk = any(w in top_title for w in ['fake', 'hoax', 'debunked', 'fact check: false', 'false claim', 'busted'])
+    is_debunk_dominant = (debunk_hits > 0 and debunk_hits > support_hits) or is_headline_debunk
+
     # 1. Authority Corroboration (0-100)
     has_official_source = any(
         a.get('source_type') in ['Verified Reference Encyclopedia', 'Official Portal', 'Government Portal'] or
@@ -275,56 +280,55 @@ def calculate_exact_truth_metrics(claim_text: str, scored_articles: list, top_sc
         for a in scored_articles
     )
 
-    if debunk_hits > 0 and has_official_source:
+    if is_debunk_dominant and has_official_source:
         s_official = 0.0
-    elif debunk_hits > 0:
+    elif is_debunk_dominant:
         s_official = 8.0
     elif support_hits > 0 and has_official_source:
         s_official = 98.5
     elif support_hits > 0:
-        s_official = 85.0
+        s_official = 88.0
     elif scored_articles:
-        s_official = 42.0
+        s_official = 60.0
     else:
-        s_official = 18.0
+        s_official = 25.0
 
     # 2. Multi-Source Consensus (0-100)
     pub_count = len(scored_articles)
     unique_publishers = len(set(a.get('publisher', '') for a in scored_articles))
-    if debunk_hits > 0:
-        s_consensus = max(4.0, 24.0 - (debunk_hits * 8.0))
-    elif pub_count >= 5 and unique_publishers >= 4:
+    if is_debunk_dominant:
+        s_consensus = max(4.0, 20.0 - (debunk_hits * 5.0))
+    elif pub_count >= 4 and unique_publishers >= 3:
         s_consensus = 96.5
-    elif pub_count >= 3:
-        s_consensus = 82.0 + (pub_count * 2.5)
+    elif pub_count >= 2:
+        s_consensus = 84.0 + (pub_count * 2.5)
     elif pub_count >= 1:
-        s_consensus = 58.0 + (pub_count * 8.0)
+        s_consensus = 72.0
     else:
-        s_consensus = 14.0
+        s_consensus = 20.0
     s_consensus = min(99.0, s_consensus)
 
     # 3. NLP Fact Alignment (0-100)
-    top_art = scored_articles[0] if scored_articles else None
     if top_art:
         lev = top_art.get('levenshtein_similarity', 0.0)
         jac = top_art.get('jaccard_similarity', 0.0)
         s_semantic = round((0.55 * lev + 0.45 * jac) * 100.0, 2)
     else:
-        s_semantic = 12.0
+        s_semantic = 15.0
 
     # 4. Domain Authority & Provenance (0-100)
     if scored_articles:
         high_trust = sum(1 for a in scored_articles if any(t in a.get('publisher', '').lower() for t in ['reuters', 'hindu', 'bbc', 'pib', 'ani', 'pti', 'wikipedia', 'express', 'times', 'doordarshan', 'ndtv']))
-        s_prov = min(98.0, 72.0 + (high_trust * 7.0))
+        s_prov = min(98.0, 75.0 + (high_trust * 7.0))
     else:
         s_prov = 20.0
 
     # 5. Debunk Penalty Index
-    p_negation = min(100.0, debunk_hits * 48.0)
+    p_negation = min(100.0, debunk_hits * 50.0) if is_debunk_dominant else 0.0
 
     # Decision Matrix
-    if debunk_hits > 0 and has_official_source:
-        exact_pct = round(max(3.2, 12.5 - (debunk_hits * 3.2) + (s_semantic * 0.04)), 1)
+    if is_debunk_dominant and has_official_source:
+        exact_pct = round(max(3.2, 12.5 - (debunk_hits * 3.2)), 1)
         verdict = "Contradicted"
         verdict_label = "False"
         verdict_color = "#ef4444"
@@ -333,8 +337,8 @@ def calculate_exact_truth_metrics(claim_text: str, scored_articles: list, top_sc
             f"Live web search found articles directly refuting or fact-checking this claim. "
             f"Authoritative reports and debunk registries confirm this information is false or fabricated."
         )
-    elif debunk_hits > 0:
-        exact_pct = round(max(6.5, 20.0 - (debunk_hits * 4.0) + (s_semantic * 0.06)), 1)
+    elif is_debunk_dominant:
+        exact_pct = round(max(6.5, 18.0 - (debunk_hits * 3.0)), 1)
         verdict = "Contradicted"
         verdict_label = "False"
         verdict_color = "#ef4444"
@@ -343,9 +347,9 @@ def calculate_exact_truth_metrics(claim_text: str, scored_articles: list, top_sc
             f"Fact-checking registries and web news reports explicitly debunk this claim. "
             f"Published reporting indicates this is a viral rumor or fabricated narrative."
         )
-    elif scored_articles and top_score >= 0.30 and support_hits > 0:
+    elif scored_articles and (support_hits >= debunk_hits or top_score >= 0.22):
         raw_score = (0.35 * s_official) + (0.25 * s_consensus) + (0.20 * s_semantic) + (0.10 * s_prov) + (0.10 * (100.0 - p_negation))
-        exact_pct = round(min(98.8, max(76.5, raw_score)), 1)
+        exact_pct = round(min(98.8, max(82.0, raw_score)), 1)
         verdict = "Supported"
         verdict_label = "True"
         verdict_color = "#22c55e"
@@ -354,9 +358,9 @@ def calculate_exact_truth_metrics(claim_text: str, scored_articles: list, top_sc
             f"Confirmed by live news reports on the internet. "
             f"Multiple verified publishers actively corroborate this announcement with matching details."
         )
-    elif scored_articles and (top_score >= 0.18 or pub_count >= 2):
-        raw_score = (0.30 * s_official) + (0.25 * s_consensus) + (0.25 * s_semantic) + (0.10 * s_prov) + (0.10 * 55.0)
-        exact_pct = round(max(38.0, min(65.0, raw_score)), 1)
+    elif scored_articles and (top_score >= 0.15 or pub_count >= 1):
+        raw_score = (0.30 * s_official) + (0.25 * s_consensus) + (0.25 * s_semantic) + (0.10 * s_prov) + (0.10 * 60.0)
+        exact_pct = round(max(42.0, min(65.0, raw_score)), 1)
         verdict = "Partially Supported / Misleading"
         verdict_label = "Misleading"
         verdict_color = "#f97316"
@@ -366,7 +370,7 @@ def calculate_exact_truth_metrics(claim_text: str, scored_articles: list, top_sc
             f"speculative, or partially inaccurate when compared with authoritative reporting."
         )
     else:
-        exact_pct = 22.4
+        exact_pct = 24.5
         verdict = "Unverified"
         verdict_label = "Unverified"
         verdict_color = "#eab308"
