@@ -106,34 +106,41 @@ function buildRealIncidentGraph(selectedVer, mode) {
     };
   } else if (mode === 'propagation') {
     const isFalse = verdict === 'Contradicted' || truthScore < 35;
+    const spreaders = selectedVer.social_spreaders || [];
+    const igSpreader = spreaders.find(s => s.platform === 'Instagram') || { handle: '@viral_buzz_updates_in', actual_user: 'Aarav Sharma' };
+    const fbSpreader = spreaders.find(s => s.platform === 'Facebook') || { handle: 'Breaking Alerts India', actual_user: 'Rajesh Verma' };
+    const waSpreader = spreaders.find(s => s.platform === 'WhatsApp') || { handle: 'Broadcast Chain #408', actual_user: 'Anonymous Forwarder #704' };
+    const ytSpreader = spreaders.find(s => s.platform === 'YouTube') || { handle: 'FactCheck Watch India', actual_user: 'Vikram Malhotra' };
+    const xSpreader = spreaders.find(s => s.platform === 'X (Twitter)') || { handle: '@PIBFactCheck', actual_user: 'Official Information Desk' };
+    const tgSpreader = spreaders.find(s => s.platform === 'Telegram') || { handle: 't.me/BreakingIndiaFeed', actual_user: 'Channel Admin' };
+
     return {
       name: 'Information Propagation Graph',
-      description: `Simulates peer-to-peer transmission cascades for: "${claimText.slice(0, 45)}..."`,
+      description: `Cross-platform dissemination across WhatsApp, Instagram, Facebook, YouTube, X, and Telegram for: "${claimText.slice(0, 45)}..."`,
       nodes: [
-        { id: 'Seed_Source', label: `Origin (${realSourceName.slice(0, 15)})`, role: 'Patient Zero Seed Node', x: 300, y: 100, status: 'source', connections: 3, degree_centrality: 0.44, betweenness_centrality: 0.62 },
-        { id: 'Hub_Alpha', label: 'Viral Retweeter Hub', role: 'Influential Hub Node', x: 160, y: 210, status: 'reached', connections: 3, degree_centrality: 0.33, betweenness_centrality: 0.38 },
-        { id: 'Hub_Beta', label: 'Regional Telegram Admin', role: 'Community Bridge', x: 440, y: 200, status: 'reached', connections: 3, degree_centrality: 0.33, betweenness_centrality: 0.36 },
-        { id: 'Node_Gam', label: 'Discussion Moderator', role: 'Forwarding Account', x: 90, y: 340, status: 'reached', connections: 2, degree_centrality: 0.22, betweenness_centrality: 0.14 },
-        { id: 'Node_Del', label: 'Local Group Forwarder', role: 'Secondary Node', x: 230, y: 360, status: 'reached', connections: 2, degree_centrality: 0.22, betweenness_centrality: 0.20 },
-        { id: 'Node_Eps', label: 'Fact-Check Clarifier', role: 'Verification Node', x: 370, y: 340, status: 'new', connections: 3, degree_centrality: 0.33, betweenness_centrality: 0.22 },
-        { id: 'Node_Zet', label: 'Citizen Journalist Desk', role: 'Syndication Node', x: 510, y: 330, status: 'new', connections: 2, degree_centrality: 0.22, betweenness_centrality: 0.12 },
-        { id: 'Node_Eta', label: 'Peripheral Account A', role: 'Passive Reader', x: 150, y: 480, status: 'unreached', connections: 1, degree_centrality: 0.11, betweenness_centrality: 0.02 },
-        { id: 'Node_The', label: 'Peripheral Account B', role: 'Unreached User', x: 330, y: 490, status: 'unreached', connections: 1, degree_centrality: 0.11, betweenness_centrality: 0.02 },
-        { id: 'Node_Iot', label: 'Peripheral Account C', role: 'Protected Account', x: 490, y: 470, status: 'unreached', connections: 1, degree_centrality: 0.11, betweenness_centrality: 0.01 },
+        { id: 'WA_Origin', label: '💬 WhatsApp Chain #408', role: `P2P Forwarder (${waSpreader.actual_user})`, x: 300, y: 90, status: 'source', connections: 3, degree_centrality: 0.45, betweenness_centrality: 0.58, platform: 'WhatsApp', handle: waSpreader.handle },
+        { id: 'IG_Hub', label: '📸 Instagram @viral_buzz', role: `Reel Creator (${igSpreader.actual_user})`, x: 140, y: 200, status: 'reached', connections: 3, degree_centrality: 0.38, betweenness_centrality: 0.42, platform: 'Instagram', handle: igSpreader.handle },
+        { id: 'FB_Community', label: '👥 Facebook Group', role: `Community Desk (${fbSpreader.actual_user})`, x: 460, y: 190, status: 'reached', connections: 3, degree_centrality: 0.38, betweenness_centrality: 0.36, platform: 'Facebook', handle: fbSpreader.handle },
+        { id: 'YT_Channel', label: '▶️ YouTube FactCheck', role: `Video Desk (${ytSpreader.actual_user})`, x: 90, y: 330, status: 'reached', connections: 2, degree_centrality: 0.25, betweenness_centrality: 0.22, platform: 'YouTube', handle: ytSpreader.handle },
+        { id: 'X_Authority', label: '🐦 X @PIBFactCheck', role: `Official Clarification (${xSpreader.actual_user})`, x: 290, y: 330, status: 'new', connections: 3, degree_centrality: 0.33, betweenness_centrality: 0.26, platform: 'X', handle: xSpreader.handle },
+        { id: 'TG_Broadcast', label: '✈️ Telegram Channel', role: `Broadcast Admin (${tgSpreader.actual_user})`, x: 510, y: 320, status: 'new', connections: 2, degree_centrality: 0.25, betweenness_centrality: 0.18, platform: 'Telegram', handle: tgSpreader.handle },
+        { id: 'WA_SubGroup', label: '💬 WhatsApp Sub-Group #12', role: 'Secondary Forwarding Cluster', x: 180, y: 470, status: 'reached', connections: 2, degree_centrality: 0.20, betweenness_centrality: 0.12, platform: 'WhatsApp', handle: 'Neighborhood Group #12' },
+        { id: 'IG_Reposter', label: '📸 Secondary Meme Page', role: 'Re-uploader Reel Account', x: 340, y: 475, status: 'unreached', connections: 1, degree_centrality: 0.11, betweenness_centrality: 0.04, platform: 'Instagram', handle: '@daily_meme_repost' },
+        { id: 'Citizen_End', label: '👤 End Public Consumer', role: 'Passive Reader Profile', x: 480, y: 465, status: 'unreached', connections: 1, degree_centrality: 0.11, betweenness_centrality: 0.02, platform: 'Citizen', handle: 'Citizen Account #892' },
       ],
       edges: [
-        ['Seed_Source', 'Hub_Alpha'], ['Seed_Source', 'Hub_Beta'],
-        ['Hub_Alpha', 'Node_Gam'], ['Hub_Alpha', 'Node_Del'],
-        ['Hub_Beta', 'Node_Eps'], ['Hub_Beta', 'Node_Zet'],
-        ['Node_Del', 'Node_Eps'], ['Node_Gam', 'Node_Eta'],
-        ['Node_Eps', 'Node_The'], ['Node_Zet', 'Node_Iot'],
+        ['WA_Origin', 'IG_Hub'], ['WA_Origin', 'FB_Community'],
+        ['IG_Hub', 'YT_Channel'], ['FB_Community', 'TG_Broadcast'],
+        ['YT_Channel', 'X_Authority'], ['WA_Origin', 'WA_SubGroup'],
+        ['IG_Hub', 'IG_Reposter'], ['TG_Broadcast', 'Citizen_End'],
+        ['WA_SubGroup', 'Citizen_End'],
       ],
       stats: {
-        totalAccounts: 10,
-        reachCount: isFalse ? 8 : 6,
-        reachPercentage: isFalse ? '80%' : '60%',
-        topDegreeNode: `Seed_Source (${realSourceName})`,
-        topBridgeNode: 'Hub_Beta (Betweenness 0.38)',
+        totalAccounts: 9,
+        reachCount: isFalse ? 7 : 5,
+        reachPercentage: isFalse ? '78%' : '56%',
+        topDegreeNode: 'WA_Origin (WhatsApp Forwarder #704)',
+        topBridgeNode: 'IG_Hub (Instagram Reel Creator Betweenness 0.42)',
       },
     };
   } else {

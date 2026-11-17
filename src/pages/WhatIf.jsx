@@ -456,10 +456,14 @@ function WhatIf() {
               >
                 {network?.nodes?.map((u, i) => {
                   const deg = network.adj[u]?.length || 0;
-                  const isTopSeed = i === 0;
+                  const spreaders = currentIncident?.social_spreaders || [];
+                  const spreader = spreaders[i];
+                  const labelSuffix = spreader 
+                    ? `— [${spreader.platform}: ${spreader.handle.slice(0, 22)}]` 
+                    : (i === 0 ? `— ⭐ [Seed: ${realSourceName.slice(0, 18)}]` : '');
                   return (
                     <option key={u} value={u}>
-                      {u} {isTopSeed ? `— ⭐ [Seed: ${realSourceName.slice(0, 16)}]` : ''} ({deg} conns)
+                      {u} {labelSuffix} ({deg} conns)
                     </option>
                   );
                 })}

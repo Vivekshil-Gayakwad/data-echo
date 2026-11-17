@@ -233,13 +233,25 @@ def get_verifications():
         SELECT id, claim_text as claim, category, verdict, verdict_label as label,
                verdict_badge as badge, truth_score as truthScore,
                earliest_source as earliestSource, earliest_timestamp as earliestTimestamp,
-               official_source_url as officialSourceUrl, explanation,
+               official_source_url as officialSourceUrl, explanation, data_json,
                created_at as date
         FROM verifications
         ORDER BY id DESC
         LIMIT 30
     """)
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = []
+    for r in cur.fetchall():
+        d = dict(r)
+        if d.get("data_json"):
+            try:
+                parsed = json.loads(d["data_json"])
+                d["social_spreaders"] = parsed.get("social_spreaders", [])
+                d["factor_breakdown"] = parsed.get("factor_breakdown", {})
+                d["live_articles_found"] = parsed.get("live_articles_found", [])
+                d["real_source_name"] = parsed.get("real_source_name") or d["earliestSource"]
+            except Exception:
+                pass
+        rows.append(d)
     conn.close()
 
     return jsonify({"verifications": rows, "count": len(rows)})
